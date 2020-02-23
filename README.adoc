@@ -1,0 +1,46 @@
+= Order Service
+
+== Run
+
+=== Setup MySQL
+
+Create and run MySQL instance via Docker:
+
+[source, shell]
+....
+docker run --name order-mysql -p 3308:3306 -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=order -e MYSQL_USER=test -e MYSQL_PASSWORD=passwd -d mysql:5.7
+....
+
+Connect instance by client tool:
+
+[source, shell]
+....
+docker exec -it inventory-mysql bash
+....
+
+=== Setup RabbitMQ
+
+[NOTE]
+====
+https://hub.docker.com/_/rabbitmq/
+====
+
+[source, bash]
+....
+docker run -d --hostname localhost --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+....
+
+Declare queue
+
+[source, shell]
+....
+rabbitmqadmin declare queue name=uid-440099 durable=false auto-delete=true \
+     'arguments={"x-message-ttl":86400000,"x-expires":86400000,"x-dead-letter-exchange":"deadletters.fanout"}' \
+....
+
+Binding Exchange and Queue
+
+[source, shell]
+....
+$ rabbitmqadmin declare binding source="amq.direct" destination_type="queue" destination="submit-order-saga" routing_key="submit-order-saga"
+....

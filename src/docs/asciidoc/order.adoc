@@ -1,0 +1,26 @@
+= Order
+
+== Create
+
+operation::order/create[]
+
+== Submit
+
+operation::order/submit[]
+
+== Start Delivery
+
+operation::order/startDelivery[]
+
+== Complete Delivery
+
+operation::order/completeDelivery[]
+
+== Close
+
+operation::order/close[]
+
+== Cancel
+
+operation::order/cancel[]
+
