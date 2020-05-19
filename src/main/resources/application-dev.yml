@@ -9,6 +9,11 @@ spring:
     driver-class-name: com.mysql.jdbc.Driver
   jpa:
     hibernate.ddl-auto: update
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9103/uaa/token_keys
 eureka:
   instance:
     hostname: localhost
@@ -23,3 +28,15 @@ mq:
     routing-key: submit-order-saga
     queue:
       name: submit-order-saga
+feign:
+  oauth:
+    authorization-grant-type: password
+    access-token-uri: http://localhost:9103/uaa/oauth/token
+    client:
+      id: service
+      secret: secret
+      scope: uaa.user,openid,profile,email,catalog.read,inventory.read,inventory.write
+      username: order_service
+      password: password
+      
+    

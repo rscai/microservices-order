@@ -68,6 +68,7 @@ import org.springframework.restdocs.payload.RequestFieldsSnippet;
 import org.springframework.restdocs.payload.ResponseFieldsSnippet;
 import org.springframework.restdocs.request.ParameterDescriptor;
 import org.springframework.restdocs.request.RequestParametersSnippet;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -81,6 +82,8 @@ public class OrderControllerTest {
   private static final String PRODUCT_ID_A = "productA";
   private static final String PRODUCT_ID_B = "productB";
   private static final String APPLICATION_HAL = "application/hal+json";
+  private static final String SCOPE_ORDER_USE = "SCOPE_order.use";
+  private static final String SCOPE_ORDER_OPERATE = "SCOPE_order.operate";
   @Autowired
   private MockMvc mvc;
   @Autowired
@@ -176,6 +179,7 @@ public class OrderControllerTest {
 
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testCreateAndGetOne() throws Exception {
     Map<String, InventoryItem> mockInventoryItems = new HashMap<>();
     InventoryItem inventoryItemA = new InventoryItem("1", PRODUCT_ID_A, 100,
@@ -186,7 +190,7 @@ public class OrderControllerTest {
     mockInventoryItems.put(inventoryItemB.getProductId(), inventoryItemB);
     when(mockInventoryClient.searchByProductIdIn(anyList(), any())).thenAnswer(invocation -> {
       final List<?> productIds = invocation.getArgument(0, List.class);
-      final InventoryItem inventoryItem = mockInventoryItems.get((String) productIds.get(0));
+      final InventoryItem inventoryItem = mockInventoryItems.get(productIds.get(0));
       return pagedResourcesAssembler.toModel(new PageImpl<>(
           Collections.singletonList(inventoryItem), PageRequest.of(0, 10), 1));
     });
@@ -232,6 +236,7 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testSubmitPass() throws Exception {
     mvc.perform(put("/orders/{id}/submit", openOrderId).accept(APPLICATION_HAL))
         .andExpect(status().isNoContent())
@@ -247,12 +252,14 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testSubmitFail() throws Exception {
     mvc.perform(put("/orders/{id}/submit", submittedOrderId).accept(APPLICATION_HAL))
         .andExpect(status().isConflict());
   }
 
   @Test
+  @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testStartDeliveryPass() throws Exception {
     mvc.perform(put("/orders/{id}/startDelivery", paidOrderId))
         .andExpect(status().isNoContent())
@@ -264,12 +271,14 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testStartDeliveryFail() throws Exception {
     mvc.perform(put("/orders/{id}/startDelivery", onDeliveryOrderId).accept(APPLICATION_HAL))
         .andExpect(status().isConflict());
   }
 
   @Test
+  @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testCompleteDeliveryPass() throws Exception {
     mvc.perform(put("/orders/{id}/completeDelivery", onDeliveryOrderId))
         .andExpect(status().isNoContent())
@@ -281,12 +290,14 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testCompleteDeliveryFail() throws Exception {
     mvc.perform(put("/orders/{id}/completeDelivery", deliveredOrderId))
         .andExpect(status().isConflict());
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testClosePass() throws Exception {
     mvc.perform(put("/orders/{id}/close", deliveredOrderId))
         .andExpect(status().isNoContent())
@@ -298,12 +309,14 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testCloseFail() throws Exception {
     mvc.perform(put("/orders/{id}/close", closedOrderId))
         .andExpect(status().isConflict());
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testCancelPass() throws Exception {
     mvc.perform(put("/orders/{id}/cancel", openOrderId))
         .andExpect(status().isNoContent())
@@ -315,12 +328,14 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testCancelFail() throws Exception {
     mvc.perform(put("/orders/{id}/cancel", cancelledOrderId))
         .andExpect(status().isConflict());
   }
 
   @Test
+  @WithMockUser(username = "customer1", authorities = {SCOPE_ORDER_USE})
   public void testGetSearchByStates() throws Exception {
     mvc.perform(
         get("/orders/search/stateIn?state={state1}&state={state2}&page={page}&size={size}&sort={sort}",
@@ -336,6 +351,7 @@ public class OrderControllerTest {
   }
 
   @Test
+  @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testSearchByCustomerId() throws Exception {
     mvc.perform(
         get("/orders/search/customerId?customerId={customerId}&page={page}&size={size}&sort={sort}",

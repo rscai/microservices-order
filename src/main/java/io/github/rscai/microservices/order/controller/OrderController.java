@@ -23,6 +23,7 @@ import org.springframework.hateoas.PagedModel;
 import org.springframework.hateoas.server.EntityLinks;
 import org.springframework.hateoas.server.ExposesResourceFor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("orders")
 public class OrderController {
 
+  private static final String AUTHORITY_ORDER_USE = "hasAuthority('SCOPE_order.use')";
+  private static final String AUTHORITY_ORDER_OPERATE = "hasAuthority('SCOPE_order.operate')";
   private final EntityLinks entityLinks;
   @Autowired
   private OrderRepository orderRepository;
@@ -56,6 +59,7 @@ public class OrderController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public EntityModel<Order> create(@RequestBody Order order) {
     order.setState(State.OPEN);
     for (OrderItem item : order.getItems()) {
@@ -71,7 +75,7 @@ public class OrderController {
         orderItem.getUnitPrice().multiply(BigDecimal.valueOf(orderItem.getQuantity()))
     ).reduce(BigDecimal::add).orElse(BigDecimal.ZERO);
     order.setAmount(amount);
-    ;
+    
     EntityModel<Order> createdOne = new EntityModel<>(orderRepository.save(order));
     createdOne.add(itemLinks(Objects.requireNonNull(createdOne.getContent())));
     return createdOne;
@@ -79,6 +83,7 @@ public class OrderController {
 
   @PutMapping("{id}/submit")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public void submit(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -91,6 +96,7 @@ public class OrderController {
 
   @PutMapping("{id}/cancel")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public void cancel(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -104,6 +110,7 @@ public class OrderController {
 
   @PutMapping("{id}/startDelivery")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PreAuthorize(AUTHORITY_ORDER_OPERATE)
   public void startDelivery(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -117,6 +124,7 @@ public class OrderController {
 
   @PutMapping("{id}/completeDelivery")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PreAuthorize(AUTHORITY_ORDER_OPERATE)
   public void completeDelivery(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -130,6 +138,7 @@ public class OrderController {
 
   @PutMapping("{id}/close")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public void close(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -142,6 +151,7 @@ public class OrderController {
   }
 
   @GetMapping("{id}")
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public EntityModel<Order> getOne(@PathVariable("id") String id) {
     Order order = orderRepository.findById(id).orElseThrow(
         () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -153,6 +163,7 @@ public class OrderController {
   }
 
   @GetMapping("search/stateIn")
+  @PreAuthorize(AUTHORITY_ORDER_USE)
   public PagedModel<EntityModel<Order>> searchByStateIn(@RequestParam("state") State[] states,
       @NotNull Pageable pageable) {
     Page<Order> orders = orderRepository.findByStateIn(states, pageable);
@@ -160,6 +171,7 @@ public class OrderController {
   }
 
   @GetMapping("search/customerId")
+  @PreAuthorize(AUTHORITY_ORDER_OPERATE)
   public PagedModel<EntityModel<Order>> searchByCustomerId(
       @RequestParam("customerId") String customerId,
       @NotNull Pageable pageable) {
