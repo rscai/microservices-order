@@ -26,7 +26,7 @@ public class OrderService {
     // publish create SubmitOrderSaga event
     SubmitOrderSaga declareEvent = new SubmitOrderSaga();
     declareEvent.setOrderId(order.getId());
-    declareEvent.setStep(Saga.DECLARED);
+    declareEvent.setStep(Saga.CREATED);
     amqpTemplate.convertAndSend(routingKey, declareEvent);
     return true;
   }

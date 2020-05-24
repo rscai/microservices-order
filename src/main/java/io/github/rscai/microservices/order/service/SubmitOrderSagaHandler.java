@@ -9,7 +9,6 @@ import io.github.rscai.microservices.order.repository.OrderRepository;
 import io.github.rscai.microservices.order.saga.Saga;
 import io.github.rscai.microservices.order.saga.SagaException;
 import io.github.rscai.microservices.order.saga.SubmitOrderSaga;
-import io.github.rscai.microservices.order.saga.SubmitOrderSagaRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,7 +16,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang.StringUtils;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,8 +38,6 @@ public class SubmitOrderSagaHandler {
   @Autowired
   private InventoryClient inventoryClient;
   @Autowired
-  private SubmitOrderSagaRepository sagaRepository;
-  @Autowired
   private OrderRepository orderRepository;
   @Autowired
   private PlatformTransactionManager transactionManager;
@@ -51,10 +47,7 @@ public class SubmitOrderSagaHandler {
   @RabbitListener(queues = "${mq.submit-order-saga.queue.name}")
   public void processSubmitOrderEvent(@Payload SubmitOrderSaga event) throws SagaException {
     log.debug(String.format("Received message %s", event.toString()));
-    if (Saga.DECLARED.equals(event.getStep())) {
-      SubmitOrderSaga saga = createSaga(event);
-      rabbitTemplate.convertAndSend(routingKey, saga);
-    } else if (SubmitOrderSaga.CREATED.equals(event.getStep())) {
+    if (SubmitOrderSaga.CREATED.equals(event.getStep())) {
       SubmitOrderSaga saga = decreaseInventory(event);
       rabbitTemplate.convertAndSend(routingKey, saga);
     } else if (SubmitOrderSaga.DECREASED_INVENTORY.equals(event.getStep())) {
@@ -74,26 +67,12 @@ public class SubmitOrderSagaHandler {
     }
   }
 
-  private SubmitOrderSaga createSaga(SubmitOrderSaga saga) throws SagaException {
-    try {
-      if (!StringUtils.isEmpty(saga.getId()) && sagaRepository.existsById(saga.getId())) {
-        saga.setStep(Saga.CREATED);
-        return saga;
-      }
-      saga.setStep(Saga.CREATED);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
-    } catch (TransactionException | DataAccessException ex) {
-      log.error(ex.getMessage(), ex);
-      throw new SagaException(ex.getMessage(), ex);
-    }
-  }
-
   private SubmitOrderSaga decreaseInventory(SubmitOrderSaga saga) throws SagaException {
     try {
       Optional<Order> orderOptional = orderRepository.findById(saga.getOrderId());
       if (!orderOptional.isPresent()) {
         saga.setStep(Saga.ROLLBACK);
-        return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+        return saga;
       }
       Order order = orderOptional.get();
       List<String> productIds = order.getItems().stream().map(OrderItem::getProductId)
@@ -107,7 +86,7 @@ public class SubmitOrderSagaHandler {
         Stream<Optional<InventoryItemQuantityChange>> changes = order.getItems().stream()
             .map(item -> {
               if (!itemIndexByProductId.containsKey(item.getProductId())) {
-                return Optional.<InventoryItemQuantityChange>empty();
+                return Optional.empty();
               }
               InventoryItem inventoryItem = itemIndexByProductId.get(item.getProductId());
               InventoryItemQuantityChange change = new InventoryItemQuantityChange();
@@ -127,10 +106,10 @@ public class SubmitOrderSagaHandler {
       } catch (FeignException ex) {
         log.error(ex.getMessage(), ex);
         saga.setStep(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK);
-        return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+        return saga;
       }
       saga.setStep(SubmitOrderSaga.DECREASED_INVENTORY);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+      return saga;
     } catch (TransactionException | DataAccessException ex) {
       log.error(ex.getMessage(), ex);
       throw new SagaException(ex.getMessage(), ex);
@@ -141,7 +120,7 @@ public class SubmitOrderSagaHandler {
     Optional<Order> orderOptional = orderRepository.findById(saga.getOrderId());
     if (!orderOptional.isPresent()) {
       saga.setStep(SubmitOrderSaga.SUBMITTED_STATUS_ROLLBACK);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+      return saga;
     }
     Order order = orderOptional.get();
     if (!order.submit()) {
@@ -152,7 +131,7 @@ public class SubmitOrderSagaHandler {
     try {
       return buildTransactionTemplate().execute(status -> {
         orderRepository.save(order);
-        return sagaRepository.save(saga);
+        return saga;
       });
     } catch (TransactionException | DataAccessException ex) {
       log.error(ex.getMessage(), ex);
@@ -165,7 +144,7 @@ public class SubmitOrderSagaHandler {
       Optional<Order> orderOptional = orderRepository.findById(saga.getOrderId());
       if (!orderOptional.isPresent()) {
         saga.setStep(Saga.ROLLBACK);
-        return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+        return saga;
       }
       Order order = orderOptional.get();
       List<String> productIds = order.getItems().stream().map(OrderItem::getProductId)
@@ -178,7 +157,7 @@ public class SubmitOrderSagaHandler {
       Stream<Optional<InventoryItemQuantityChange>> changes = order.getItems().stream()
           .map(item -> {
             if (!itemIndexByProductId.containsKey(item.getProductId())) {
-              return Optional.<InventoryItemQuantityChange>empty();
+              return Optional.empty();
             }
             InventoryItem inventoryItem = itemIndexByProductId.get(item.getProductId());
             InventoryItemQuantityChange change = new InventoryItemQuantityChange();
@@ -199,7 +178,7 @@ public class SubmitOrderSagaHandler {
         return saga;
       }
       saga.setStep(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+      return saga;
     } catch (TransactionException | DataAccessException ex) {
       log.error(ex.getMessage(), ex);
       throw new SagaException(ex.getMessage(), ex);
@@ -209,7 +188,7 @@ public class SubmitOrderSagaHandler {
   private SubmitOrderSaga markRollback(SubmitOrderSaga saga) throws SagaException {
     try {
       saga.setStep(Saga.ROLLBACK);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+      return saga;
     } catch (TransactionException | DataAccessException ex) {
       log.error(ex.getMessage(), ex);
       throw new SagaException(ex.getMessage(), ex);
@@ -219,7 +198,7 @@ public class SubmitOrderSagaHandler {
   private SubmitOrderSaga markCompleted(SubmitOrderSaga saga) throws SagaException {
     try {
       saga.setStep(Saga.COMPLETED);
-      return buildTransactionTemplate().execute(status -> sagaRepository.save(saga));
+      return saga;
     } catch (TransactionException | DataAccessException ex) {
       log.error(ex.getMessage(), ex);
       throw new SagaException(ex.getMessage(), ex);

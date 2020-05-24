@@ -22,7 +22,6 @@ import io.github.rscai.microservices.order.model.OrderItem;
 import io.github.rscai.microservices.order.repository.OrderRepository;
 import io.github.rscai.microservices.order.saga.Saga;
 import io.github.rscai.microservices.order.saga.SubmitOrderSaga;
-import io.github.rscai.microservices.order.saga.SubmitOrderSagaRepository;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -61,8 +60,6 @@ public class SubmitOrderSagaHandlerTest {
   private PagedResourcesAssembler<InventoryItem> pagedResourcesAssembler;
   @Autowired
   private SubmitOrderSagaHandler testObject;
-  @Autowired
-  private SubmitOrderSagaRepository sagaRepository;
 
   private String orderIdA;
 
@@ -79,35 +76,13 @@ public class SubmitOrderSagaHandlerTest {
 
   @AfterEach
   public void tearDown() {
-    sagaRepository.deleteAll();
     orderRepository.deleteAll();
   }
 
   @Test
   public void testSubmitOrderSuccess() throws Exception {
-    SubmitOrderSaga saga = new SubmitOrderSaga();
-    saga.setOrderId(orderIdA);
-    saga.setStep(Saga.DECLARED);
 
-    // create saga
-    testObject.processSubmitOrderEvent(saga);
-    // verify mq
-    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
-    assertThat(sagaCaptor.getValue(), instanceOf(SubmitOrderSaga.class));
-    SubmitOrderSaga createdSaga = (SubmitOrderSaga) sagaCaptor.getValue();
-    assertThat(createdSaga.getStep(), is(Saga.CREATED));
-    assertThat(createdSaga.getOrderId(), is(orderIdA));
-    // verify DB
-    assertThat(sagaRepository.findById(createdSaga.getId())
-        .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(), is(Saga.CREATED));
-
-    assertThat(orderRepository.findById(orderIdA)
-            .orElseThrow(() -> new AssertionError("required order, but missed")).getState(),
-        is(State.OPEN));
-
-    // decrease inventory item quantity
-    clearInvocations(mockAmqpTemplate);
+    // mock for decreasing inventory item quantity
     InventoryItem itemA = new InventoryItem();
     itemA.setId("itemA");
     itemA.setProductId(PRODUCT_ID_A);
@@ -125,7 +100,14 @@ public class SubmitOrderSagaHandlerTest {
         .thenReturn(inventoryItems);
     when(mockInventoryClient.changeInventoryItemQuantity(anyList()))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    testObject.processSubmitOrderEvent(createdSaga);
+
+    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
+
+    SubmitOrderSaga saga = new SubmitOrderSaga();
+    saga.setOrderId(orderIdA);
+    saga.setStep(Saga.CREATED);
+
+    testObject.processSubmitOrderEvent(saga);
 
     // verify mq
     verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
@@ -134,10 +116,6 @@ public class SubmitOrderSagaHandlerTest {
     assertThat(decreasedInventorySaga.getStep(), is(SubmitOrderSaga.DECREASED_INVENTORY));
     assertThat(decreasedInventorySaga.getOrderId(), is(orderIdA));
     // verify DB
-    assertThat(sagaRepository.findById(decreasedInventorySaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.DECREASED_INVENTORY));
-
     assertThat(orderRepository.findById(orderIdA)
             .<AssertionError>orElseThrow(() -> fail("can not find order")).getState(),
         is(State.OPEN));
@@ -154,10 +132,6 @@ public class SubmitOrderSagaHandlerTest {
     assertThat(submittedStatusSaga.getStep(), is(SubmitOrderSaga.SUBMITTED_STATUS));
     assertThat(submittedStatusSaga.getOrderId(), is(orderIdA));
     // verify DB
-    assertThat(sagaRepository.findById(submittedStatusSaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.SUBMITTED_STATUS));
-
     assertThat(
         orderRepository.findById(orderIdA).<AssertionError>orElseThrow(
             () -> fail("can not find order")).getState(),
@@ -172,9 +146,6 @@ public class SubmitOrderSagaHandlerTest {
     verify(mockAmqpTemplate, times(0)).convertAndSend(anyString(), sagaCaptor.capture());
 
     // verify DB
-    assertThat(sagaRepository.findById(submittedStatusSaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(Saga.COMPLETED));
     assertThat(
         orderRepository.findById(orderIdA).<AssertionError>orElseThrow(
             () -> fail("can not find order")).getState(),
@@ -184,30 +155,7 @@ public class SubmitOrderSagaHandlerTest {
 
   @Test
   public void testSubmitOrderFailOnDecreaseInventory() throws Exception {
-    SubmitOrderSaga saga = new SubmitOrderSaga();
-    saga.setOrderId(orderIdA);
-    saga.setStep(Saga.DECLARED);
-
-    // create saga
-    testObject.processSubmitOrderEvent(saga);
-    // verify mq
-    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
-    assertThat(sagaCaptor.getValue(), instanceOf(SubmitOrderSaga.class));
-    SubmitOrderSaga createdSaga = (SubmitOrderSaga) sagaCaptor.getValue();
-    assertThat(createdSaga.getStep(), is(Saga.CREATED));
-    assertThat(createdSaga.getOrderId(), is(orderIdA));
-    // verify DB
-    assertThat(sagaRepository.findById(createdSaga.getId())
-        .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(), is(Saga.CREATED));
-
-    assertThat(orderRepository.findById(orderIdA)
-            .orElseThrow(() -> new AssertionError("required order, but missed")).getState(),
-        is(State.OPEN));
-
-    // decrease inventory fail
-    clearInvocations(mockAmqpTemplate);
-
+    // mock for decreasing inventory fail
     InventoryItem itemA = new InventoryItem();
     itemA.setId("itemA");
     itemA.setProductId(PRODUCT_ID_A);
@@ -228,7 +176,13 @@ public class SubmitOrderSagaHandlerTest {
             StringUtils.EMPTY, Collections.emptyMap(), new byte[]{}, StandardCharsets.UTF_8),
             new byte[]{}));
 
-    testObject.processSubmitOrderEvent(createdSaga);
+    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
+
+    SubmitOrderSaga saga = new SubmitOrderSaga();
+    saga.setOrderId(orderIdA);
+    saga.setStep(Saga.CREATED);
+
+    testObject.processSubmitOrderEvent(saga);
 
     // verify mq
     verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
@@ -238,10 +192,6 @@ public class SubmitOrderSagaHandlerTest {
         is(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK));
     assertThat(decreaseInventoryRollbackSaga.getOrderId(), is(orderIdA));
     // verify DB
-    assertThat(sagaRepository.findById(createdSaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK));
-
     assertThat(orderRepository.findById(orderIdA)
             .orElseThrow(() -> new AssertionError("required order, but missed")).getState(),
         is(State.OPEN));
@@ -255,10 +205,6 @@ public class SubmitOrderSagaHandlerTest {
     verify(mockAmqpTemplate, times(0)).convertAndSend(anyString(), sagaCaptor.capture());
 
     // verify DB
-    assertThat(sagaRepository.findById(createdSaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(Saga.ROLLBACK));
-
     assertThat(orderRepository.findById(orderIdA)
             .orElseThrow(() -> new AssertionError("required order, but missed")).getState(),
         is(State.OPEN));
@@ -267,28 +213,8 @@ public class SubmitOrderSagaHandlerTest {
 
   @Test
   public void testSubmitOrderFailOnSubmitStatus() throws Exception {
-    SubmitOrderSaga saga = new SubmitOrderSaga();
-    saga.setOrderId(orderIdA);
-    saga.setStep(Saga.DECLARED);
 
-    // create saga
-    testObject.processSubmitOrderEvent(saga);
-    // verify mq
-    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
-    assertThat(sagaCaptor.getValue(), instanceOf(SubmitOrderSaga.class));
-    SubmitOrderSaga createdSaga = (SubmitOrderSaga) sagaCaptor.getValue();
-    assertThat(createdSaga.getStep(), is(Saga.CREATED));
-    assertThat(createdSaga.getOrderId(), is(orderIdA));
-    // verify DB
-    assertThat(sagaRepository.findById(createdSaga.getId())
-        .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(), is(Saga.CREATED));
-
-    assertThat(orderRepository.findById(orderIdA)
-            .orElseThrow(() -> new AssertionError("required order, but missed")).getState(),
-        is(State.OPEN));
-
-    // decrease inventory item quantity
+    // mock for decreasing inventory item quantity
     clearInvocations(mockAmqpTemplate);
     InventoryItem itemA = new InventoryItem();
     itemA.setId("itemA");
@@ -307,7 +233,14 @@ public class SubmitOrderSagaHandlerTest {
         .thenReturn(inventoryItems);
     when(mockInventoryClient.changeInventoryItemQuantity(anyList()))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    testObject.processSubmitOrderEvent(createdSaga);
+
+    ArgumentCaptor<Object> sagaCaptor = ArgumentCaptor.forClass(Object.class);
+
+    SubmitOrderSaga saga = new SubmitOrderSaga();
+    saga.setOrderId(orderIdA);
+    saga.setStep(Saga.CREATED);
+
+    testObject.processSubmitOrderEvent(saga);
 
     // verify mq
     verify(mockAmqpTemplate).convertAndSend(anyString(), sagaCaptor.capture());
@@ -316,10 +249,6 @@ public class SubmitOrderSagaHandlerTest {
     assertThat(decreasedInventorySaga.getStep(), is(SubmitOrderSaga.DECREASED_INVENTORY));
     assertThat(decreasedInventorySaga.getOrderId(), is(orderIdA));
     // verify DB
-    assertThat(sagaRepository.findById(decreasedInventorySaga.getId())
-            .<AssertionError>orElseThrow(() -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.DECREASED_INVENTORY));
-
     assertThat(orderRepository.findById(orderIdA)
             .<AssertionError>orElseThrow(() -> fail("can not find order")).getState(),
         is(State.OPEN));
@@ -341,12 +270,6 @@ public class SubmitOrderSagaHandlerTest {
     assertThat(submittedStatusRollbackSaga.getStep(),
         is(SubmitOrderSaga.SUBMITTED_STATUS_ROLLBACK));
     assertThat(submittedStatusRollbackSaga.getOrderId(), is(orderIdA));
-    // verify DB
-    assertThat(
-        sagaRepository.findById(submittedStatusRollbackSaga.getId()).<AssertionError>orElseThrow(
-            () -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.SUBMITTED_STATUS_ROLLBACK));
-
     // revert order to OPEN
     existedOrder.setState(State.OPEN);
     orderRepository.save(existedOrder);
@@ -367,10 +290,6 @@ public class SubmitOrderSagaHandlerTest {
         is(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK));
     assertThat(decreaseInventoryRollbackSaga.getOrderId(), is(orderIdA));
     // verify DB
-    assertThat(
-        sagaRepository.findById(decreaseInventoryRollbackSaga.getId()).<AssertionError>orElseThrow(
-            () -> fail("can not find saga")).getStep(),
-        is(SubmitOrderSaga.DECREASED_INVENTORY_ROLLBACK));
     assertThat(orderRepository.findById(orderIdA).<AssertionError>orElseThrow(
         () -> fail("can not find order")).getState(), is(State.OPEN));
 
@@ -382,9 +301,6 @@ public class SubmitOrderSagaHandlerTest {
     // verify mq
 
     // verify DB
-    assertThat(
-        sagaRepository.findById(decreaseInventoryRollbackSaga.getId()).<AssertionError>orElseThrow(
-            () -> fail("can not find saga")).getStep(), is(Saga.ROLLBACK));
     assertThat(orderRepository.findById(orderIdA).<AssertionError>orElseThrow(
         () -> fail("can not find order")).getState(), is(State.OPEN));
 

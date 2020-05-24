@@ -248,7 +248,7 @@ public class OrderControllerTest {
     Object submitOrderSaga = submitOrderEventCaptor.getValue();
     assertThat(submitOrderSaga, instanceOf(SubmitOrderSaga.class));
     assertThat(((SubmitOrderSaga) submitOrderSaga).getOrderId(), is(openOrderId));
-    assertThat(((SubmitOrderSaga) submitOrderSaga).getStep(), is(Saga.DECLARED));
+    assertThat(((SubmitOrderSaga) submitOrderSaga).getStep(), is(Saga.CREATED));
   }
 
   @Test
