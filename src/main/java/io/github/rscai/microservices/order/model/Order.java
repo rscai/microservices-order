@@ -35,7 +35,6 @@ public class Order {
     OPEN,
     SUBMITTED,
     CANCELLED,
-    PAID,
     ON_DELIVERY,
     DELIVERED,
     CLOSED
@@ -77,16 +76,8 @@ public class Order {
     return false;
   }
 
-  public boolean pay() {
-    if (state == State.SUBMITTED) {
-      state = State.PAID;
-      return true;
-    }
-    return false;
-  }
-
   public boolean startDelivery() {
-    if (state == State.PAID) {
+    if (state == State.SUBMITTED) {
       state = State.ON_DELIVERY;
       return true;
     }

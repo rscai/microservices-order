@@ -6,7 +6,6 @@ plugins {
     id "org.sonarqube" version "2.7.1"
     id 'jacoco'
     id 'org.asciidoctor.convert' version '1.5.9.2'
-    id "org.kordamp.gradle.livereload" version "0.2.1"
 }
 
 group = 'io.github.rscai.microservices'
@@ -25,9 +24,9 @@ ext {
 
 dependencies {
     asciidoctor 'org.springframework.restdocs:spring-restdocs-asciidoctor'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
@@ -40,7 +39,6 @@ dependencies {
     testImplementation('org.springframework.boot:spring-boot-starter-test') {
         exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
     }
-    
     testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'com.h2database:h2'
@@ -64,10 +62,6 @@ test {
 asciidoctor {
     inputs.dir snippetsDir
     dependsOn test
-}
-
-liveReload {
-    docRoot asciidoctor.outputDir.canonicalPath
 }
 
 jacocoTestReport {

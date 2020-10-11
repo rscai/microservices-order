@@ -99,7 +99,6 @@ public class OrderControllerTest {
 
   private String openOrderId;
   private String submittedOrderId;
-  private String paidOrderId;
   private String onDeliveryOrderId;
   private String deliveredOrderId;
   private String closedOrderId;
@@ -125,15 +124,6 @@ public class OrderControllerTest {
     submittedOrder.setAmount(BigDecimal.valueOf(456.78));
     submittedOrder.setState(State.SUBMITTED);
     submittedOrderId = orderRepository.save(submittedOrder).getId();
-
-    Order paidOrder = new Order();
-    paidOrder.setCustomerId(CUSTOMER_ID_A);
-    paidOrder
-        .setItems(Arrays.asList(new OrderItem(PRODUCT_ID_A, 2, BigDecimal.ONE),
-            new OrderItem(PRODUCT_ID_B, 3, BigDecimal.ONE)));
-    paidOrder.setAmount(BigDecimal.valueOf(789.01));
-    paidOrder.setState(State.PAID);
-    paidOrderId = orderRepository.save(paidOrder).getId();
 
     Order onDeliveryOrder = new Order();
     onDeliveryOrder.setCustomerId(CUSTOMER_ID_A);
@@ -261,11 +251,11 @@ public class OrderControllerTest {
   @Test
   @WithMockUser(username = "order_ops", authorities = {SCOPE_ORDER_OPERATE, SCOPE_ORDER_USE})
   public void testStartDeliveryPass() throws Exception {
-    mvc.perform(put("/orders/{id}/startDelivery", paidOrderId))
+    mvc.perform(put("/orders/{id}/startDelivery", submittedOrderId))
         .andExpect(status().isNoContent())
         .andDo(document("order/startDelivery",
             pathParameters(parameterWithName("id").description("order's unique identifier"))));
-    mvc.perform(get("/orders/{id}", paidOrderId).accept(APPLICATION_HAL))
+    mvc.perform(get("/orders/{id}", submittedOrderId).accept(APPLICATION_HAL))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state", is(State.ON_DELIVERY.toString())));
   }
@@ -358,7 +348,7 @@ public class OrderControllerTest {
             CUSTOMER_ID_A, 0, 10, "createdAt,DESC").accept(APPLICATION_HAL))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith(APPLICATION_HAL))
-        .andExpect(jsonPath("$._embedded.orders", hasSize(7)))
+        .andExpect(jsonPath("$._embedded.orders", hasSize(6)))
         .andDo(document("order/search/customerId", pageRequestParameters(
             parameterWithName("customerId").description("customer unique identifier of order")),
             pageLinks(), pageResponseFields()));
